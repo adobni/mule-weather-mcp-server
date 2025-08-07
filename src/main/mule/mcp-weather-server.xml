@@ -1,0 +1,85 @@
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:mcp="http://www.mulesoft.org/schema/mule/mcp" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:slack="http://www.mulesoft.org/schema/mule/slack" xmlns:tls="http://www.mulesoft.org/schema/mule/tls" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd       http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd     http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd     http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/mcp http://www.mulesoft.org/schema/mule/mcp/current/mule-mcp.xsd">
+    <http:listener-config name="Listener-config">
+        <http:listener-connection host="0.0.0.0" port="8081" protocol="HTTP"></http:listener-connection>
+    </http:listener-config>
+    <mcp:server-config name="mcp-weather-server" serverName="Weather server" serverVersion="1.0.0">
+        <mcp:streamable-http-server-connection listenerConfig="Listener-config"></mcp:streamable-http-server-connection>
+    </mcp:server-config>
+    <flow name="mcp-current-weather-tool">
+        <mcp:tool-listener config-ref="mcp-weather-server" name="get-current-weather-status">
+            <mcp:description><![CDATA[Get the weather current status for coordinates.]]></mcp:description>
+            <mcp:parameters-schema><![CDATA[
+             {
+               "$schema": "https://json-schema.org/draft/2020-12/schema",
+               "type": "object",
+               "required": ["longitude", "latitude", "unit"],
+               "properties": {
+                 "longitude": {
+                   "type": "number",
+                   "minimum": -180,
+                   "maximum": 180
+                 },
+                 "latitude": {
+                   "type": "number",
+                   "minimum": -90,
+                   "maximum": 90
+                 },
+                 "unit": {
+                   "type": "string",
+                   "enum": ["celsius", "fahrenheit"]
+                 }
+               },
+               "additionalProperties": false
+             }
+            ]]></mcp:parameters-schema>
+            <mcp:responses>
+                <mcp:text-tool-response-content text="#[payload.^raw]"></mcp:text-tool-response-content>
+            </mcp:responses>
+        </mcp:tool-listener>
+        <logger level="INFO" message="payload #[payload]"></logger>
+        <http:request doc:id="4cf68c5b-0c81-4b8a-9ba8-63f345f2f3ca" doc:name="Request" method="GET" url="https://api.open-meteo.com/v1/forecast">
+            <http:query-params><![CDATA[#[output application/java
+              ---
+              {
+                  latitude : payload.latitude,
+                  longitude :payload.longitude,
+                  "temperature_unit" : payload.unit,
+                   elevation: "0",
+                   "current": "temperature_2m"
+              }]]]></http:query-params>
+        </http:request>
+    </flow>
+    <flow doc:id="2c832e60-b71c-4cf3-8935-05083150b7e1" name="mcp-favorite-locations-resource">
+        <mcp:resource-listener config-ref="mcp-weather-server" doc:id="f5f2bb22-9448-4476-855a-f46c0ec4612c" doc:name="MCP Server - Resource listener" name="favorite_places" resourceMimeType="application/json" uri="file:///favorites.json">
+            <mcp:description><![CDATA[Get the coordinates of my favorite places]]></mcp:description>
+            <mcp:resource-listener-content>
+                <mcp:text-resource text="#[                 write({   &quot;home&quot;: {     &quot;latitude&quot;: 34.6131,     &quot;longigut&quot;: 58.3772   },   &quot;vacation&quot;: {     &quot;latitude&quot;: 19.8968,     &quot;longigut&quot;: 155.5828   },   &quot;customer_site&quot;: {     &quot;latitude&quot;: 40.7128,     &quot;longigut&quot;: 74.006   } },&quot;application/json&quot;)]"></mcp:text-resource>
+            </mcp:resource-listener-content>
+        </mcp:resource-listener>
+        <logger level="INFO" message="Resource requested"></logger>
+    </flow>
+    <flow name="test-flow">
+        <http:listener config-ref="Listener-config" doc:id="4227929c-de71-4fab-ab67-9a677ef89ba6" doc:name="Listener" path="/"></http:listener>
+        <set-payload doc:id="9477d35b-2cb9-4d7f-b8e5-ee771327772e" doc:name="Set Payload" value="Weather MCP Server is alive!"></set-payload>
+    </flow>
+    <flow name="mcp-get-favorites-tool">
+         <mcp:tool-listener config-ref="mcp-weather-server" name="get-favorite-locations">
+            <mcp:description><![CDATA[Get my favorite locations and their coordinates.]]></mcp:description>
+            <mcp:parameters-schema><![CDATA[
+                {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "type": "object"
+                }
+            ]]></mcp:parameters-schema>
+            <mcp:responses>
+                <mcp:text-tool-response-content text="#[payload.^raw]"></mcp:text-tool-response-content>
+            </mcp:responses>    
+        </mcp:tool-listener>
+        <ee:transform doc:name="Transform" doc:id="eatvhn" >
+            <ee:message >
+                <ee:set-payload doc:name="Set payload" doc:id="jofvry" ><![CDATA[write({   "home": {     "latitude": 34.6131,     "longigut": 58.3772   },   "vacation": {     "latitude": 19.8968,     "longigut": 155.5828   },   "customer_site": {     "latitude": 40.7128,     "longigut": 74.006   } },"application/json")]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger message="Favorites: #[payload]"/>
+    </flow>
+</mule>
